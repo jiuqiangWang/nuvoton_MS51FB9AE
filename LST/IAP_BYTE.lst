@@ -1,0 +1,206 @@
+C51 COMPILER V9.60.0.0   IAP_BYTE                                                          09/18/2021 17:15:32 PAGE 1   
+
+
+C51 COMPILER V9.60.0.0, COMPILATION OF MODULE IAP_BYTE
+OBJECT MODULE PLACED IN .\Output\IAP_BYTE.obj
+COMPILER INVOKED BY: C:\Keil_v5\C51\BIN\C51.EXE Code\IAP_BYTE.c OPTIMIZE(8,SPEED) BROWSE INCDIR(.\Include;.\Common;.\Sta
+                    -rtup;.\Code) DEFINE(FOSC_160000) DEBUG OBJECTEXTEND PRINT(.\LST\IAP_BYTE.lst) TABS(2) OBJECT(.\Output\IAP_BYTE.obj)
+
+line level    source
+
+   1          /*--------------------------------------------------------------------------------------------------------
+             --*/
+   2          /*                                                                                                        
+             - */
+   3          /* Copyright(c) 2016 Nuvoton Technology Corp. All rights reserved.                                        
+             - */
+   4          /*                                                                                                        
+             - */
+   5          /*--------------------------------------------------------------------------------------------------------
+             --*/
+   6          
+   7          //********************************************************************************************************
+             -***
+   8          //  Nuvoton Technoledge Corp. 
+   9          //  Website: http://www.nuvoton.com
+  10          //  E-Mail : MicroC-8bit@nuvoton.com
+  11          //  Date   : Apr/21/2016
+  12          //********************************************************************************************************
+             -***
+  13          
+  14          //********************************************************************************************************
+             -***
+  15          //  File Function: N76E003 APROM program DATAFLASH as EEPROM way 
+  16          //********************************************************************************************************
+             -***
+  17          #include "N76E003.h"
+  18          #include "Common.h"
+  19          #include "Delay.h"
+  20          #include "SFR_Macro.h"
+  21          #include "Function_define.h"
+  22          
+  23          #define ADDR_BASE 0x4700
+  24          
+  25          #define FLASH_L_LOW     ADDR_BASE+1
+  26          #define FLASH_L_HIGH    ADDR_BASE+2
+  27          #define FLASH_H_LOW     ADDR_BASE+3
+  28          #define FLASH_H_HIGH    ADDR_BASE+4
+  29          
+  30          volatile unsigned char xdata page_buffer[128];
+  31          
+  32          
+  33          UINT8 Read_APROM_BYTE(UINT16 code *u16_addr)
+  34          {
+  35   1        UINT8 rdata;
+  36   1        rdata = *u16_addr>>8;
+  37   1        return rdata;
+  38   1      }
+  39          /*********************************************************************************************************
+             -********
+  40          write_DATAFLASH_BYTE :
+  41          user can copy all this subroutine into project, then call this function in main.
+  42          **********************************************************************************************************
+             -********/    
+  43          void Write_DATAFLASH_BYTE(unsigned int u16EPAddr,unsigned char u8EPData)
+C51 COMPILER V9.60.0.0   IAP_BYTE                                                          09/18/2021 17:15:32 PAGE 2   
+
+  44          {
+  45   1        unsigned char looptmp=0;
+  46   1        unsigned int u16_addrl_r;
+  47   1        unsigned int RAMtmp;
+  48   1        
+  49   1      //Check page start address
+  50   1        u16_addrl_r=(u16EPAddr/128)*128;
+  51   1      //Save APROM data to XRAM0
+  52   1        for(looptmp=0;looptmp<0x80;looptmp++)
+  53   1        {
+  54   2          RAMtmp = Read_APROM_BYTE((unsigned int code *)(u16_addrl_r+looptmp));
+  55   2          page_buffer[looptmp]=RAMtmp;
+  56   2        }
+  57   1      // Modify customer data in XRAM
+  58   1          page_buffer[u16EPAddr&0x7f] = u8EPData;
+  59   1        
+  60   1      //Erase APROM DATAFLASH page
+  61   1          IAPAL = u16_addrl_r&0xff;
+  62   1          IAPAH = (u16_addrl_r>>8)&0xff;
+  63   1          IAPFD = 0xFF;
+  64   1          set_IAPEN; 
+  65   1          set_APUEN;
+  66   1          IAPCN = 0x22;     
+  67   1          set_IAPGO; 
+  68   1          
+  69   1      //Save changed RAM data to APROM DATAFLASH
+  70   1          set_IAPEN; 
+  71   1          set_APUEN;
+  72   1          IAPCN = 0x21;
+  73   1          for(looptmp=0;looptmp<0x80;looptmp++)
+  74   1          {
+  75   2            IAPAL = (u16_addrl_r&0xff)+looptmp;
+  76   2            IAPAH = (u16_addrl_r>>8)&0xff;
+  77   2            IAPFD = page_buffer[looptmp];
+  78   2            set_IAPGO;      
+  79   2          }
+  80   1          clr_APUEN;
+  81   1          clr_IAPEN;
+  82   1      } 
+  83            
+  84          /*********************************************************************************************************
+             -*********/  
+  85          
+  86          struct EEPROM
+  87          {
+  88            UINT8 test1;
+  89            UINT8 test2;
+  90          }EEPROM_dat1;
+  91          
+  92          void Read_EEPROM()
+  93          {
+  94   1        UINT16 addr = sizeof(EEPROM_dat1);
+  95   1        UINT8 *p=&EEPROM_dat1;
+  96   1        UINT8 i=0;
+  97   1         
+  98   1        while(addr--)
+  99   1        {
+ 100   2            *p=Read_APROM_BYTE(0x3802+i);
+*** WARNING C214 IN LINE 100 OF Code\IAP_BYTE.c: 'Argument': conversion: non-pointer to pointer
+ 101   2            i++;
+ 102   2            *p++;
+*** WARNING C275 IN LINE 102 OF Code\IAP_BYTE.c: expression with possibly no effect
+C51 COMPILER V9.60.0.0   IAP_BYTE                                                          09/18/2021 17:15:32 PAGE 3   
+
+ 103   2        }
+ 104   1      }
+ 105          
+ 106          void Write_EEPROM()
+ 107          { 
+ 108   1        UINT8 i=0;
+ 109   1        UINT16 addr = sizeof(EEPROM_dat1);
+ 110   1        UINT8 *p=&EEPROM_dat1;
+ 111   1        
+ 112   1        while(addr--)
+ 113   1        {
+ 114   2          Write_DATAFLASH_BYTE(0x3802+i,*p);
+ 115   2          i++;
+ 116   2          *p++;
+*** WARNING C275 IN LINE 116 OF Code\IAP_BYTE.c: expression with possibly no effect
+ 117   2        }
+ 118   1      }
+ 119          
+ 120          void main (void) 
+ 121          {
+ 122   1          UINT8 datatemp;
+ 123   1          UINT16 system16highsite;
+ 124   1      /* -------------------------------------------------------------------------*/
+ 125   1      /*  Dataflash use APROM area, please ALWAYS care the address of you code    */
+ 126   1      /*  APROM 0x3800~0x38FF demo as dataflash                                   */
+ 127   1      /*  Please use Memory window key in C:0x3800 to check earse result          */        
+ 128   1      /* -------------------------------------------------------------------------*/
+ 129   1          InitialUART0_Timer1(115200);
+ 130   1      //call write byte 
+ 131   1        //  Write_DATAFLASH_BYTE (0x3802,0x34);
+ 132   1      //    Write_DATAFLASH_BYTE (FLASH_L_LOW,0x55);
+ 133   1      //    Write_DATAFLASH_BYTE (FLASH_L_HIGH,0x56);
+ 134   1      //    Write_DATAFLASH_BYTE (FLASH_H_LOW,0xaa);
+ 135   1      //    Write_DATAFLASH_BYTE (FLASH_H_HIGH,0x66);
+ 136   1      //call read byte
+ 137   1        //  datatemp = Read_APROM_BYTE(0x3802);
+ 138   1        //  system16highsite = ((Read_APROM_BYTE(FLASH_H_HIGH)<<8)+Read_APROM_BYTE(FLASH_H_LOW));
+ 139   1          
+ 140   1          Read_EEPROM(); 
+ 141   1          printf ("\n start EEPROM_dat1 test1 = 0x%bx", EEPROM_dat1.test1);
+ 142   1          if(EEPROM_dat1.test1 != 0x50)
+ 143   1          {
+ 144   2          
+ 145   2            EEPROM_dat1.test1 = 0x50;
+ 146   2            Write_EEPROM();
+ 147   2            printf ("\n 第一次保存数据，EEPROM_dat1 test1 ");
+ 148   2          }
+ 149   1          
+ 150   1          //printf ("\n data temp = 0x%bx", datatemp);
+ 151   1          printf ("\n end EEPROM_dat1 test1 = 0x%bx", EEPROM_dat1.test1);
+ 152   1        
+ 153   1          while(1)
+ 154   1          {
+ 155   2      //        printf ("\n data temp = 0x%bx", datatemp);
+ 156   2          }
+ 157   1      }
+*** WARNING C280 IN LINE 122 OF Code\IAP_BYTE.c: 'datatemp': unreferenced local variable
+*** WARNING C280 IN LINE 123 OF Code\IAP_BYTE.c: 'system16highsite': unreferenced local variable
+ 158          //--------------------------------------------------------------------------------------------------------
+             ----
+
+
+C51 COMPILER V9.60.0.0   IAP_BYTE                                                          09/18/2021 17:15:32 PAGE 4   
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =    479    ----
+   CONSTANT SIZE    =    102    ----
+   XDATA SIZE       =    128    ----
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =      2      15
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  5 WARNING(S),  0 ERROR(S)
